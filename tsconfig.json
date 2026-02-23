@@ -1,0 +1,36 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "ES2022",
+    "moduleResolution": "Bundler",
+    "strict": true,
+    "skipLibCheck": true,
+    "jsx": "react-jsx",
+    "jsxImportSource": "@lumina/core",
+    "noImplicitAny": false,
+    "baseUrl": ".",
+    "paths": {
+      "@lumina/core": ["./packages/core/src"],
+      "@lumina/core/jsx-runtime": ["./packages/core/src/jsx-runtime"],
+      "@lumina/core/jsx-dev-runtime": ["./packages/core/src/jsx-runtime"],
+      "@lumina/bridge": ["./packages/bridge/src"],
+      "@lumina/stdlib": ["./packages/stdlib/src"],
+      "@lumina/css": ["./packages/css/src"]
+    },
+    "types": []
+  },
+  "include": [
+    "packages/core/src/jsx-types.d.ts",
+    "packages/*/src/**/*.ts",
+    "packages/*/src/**/*.tsx",
+    "apps/*/*.ts",
+    "apps/*/*.tsx",
+    "apps/*/src/**/*.ts",
+    "apps/*/src/**/*.tsx",
+    "types/gjs/*.d.ts"
+  ],
+  "exclude": [
+    "node_modules",
+    "**/node_modules"
+  ]
+}

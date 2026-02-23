@@ -1,0 +1,7 @@
+# Generated files
+*.out
+*.old
+states/
+
+# IDE
+.toolbox/

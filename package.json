@@ -1,0 +1,15 @@
+{
+  "name": "lumina",
+  "version": "0.1.0",
+  "description": "React + GJS + GTK framework for desktop widgets",
+  "type": "module",
+  "scripts": {
+    "build": "tsup",
+    "start": "bash scripts/run.sh dist/bar.js",
+    "dev": "tsup --watch & bash scripts/run.sh dist/bar.js"
+  },
+  "devDependencies": {
+    "tsup": "^8.5.1",
+    "typescript": "^5.9.3"
+  }
+}
