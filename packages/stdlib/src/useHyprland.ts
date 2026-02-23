@@ -74,11 +74,47 @@ function getRuntimeDir(): string {
 
 function getSocketPath(): string {
   const his = GLib.getenv("HYPRLAND_INSTANCE_SIGNATURE");
+  if (!his) {
+    const runtimeDir = getRuntimeDir();
+    try {
+      const hyprDir = Gio.File.new_for_path(`${runtimeDir}/hypr`);
+      const enumerator = hyprDir.enumerate_children("standard::name", Gio.FileQueryInfoFlags.NONE, null);
+      let info;
+      while ((info = enumerator.next_file(null)) !== null) {
+        const name = info.get_name();
+        const socketPath = `${runtimeDir}/hypr/${name}/.socket.sock`;
+        const socketFile = Gio.File.new_for_path(socketPath);
+        if (socketFile.query_exists(null)) {
+          return socketPath;
+        }
+      }
+    } catch {
+      // Fallback to original path
+    }
+  }
   return `${getRuntimeDir()}/hypr/${his}/.socket.sock`;
 }
 
 function getEventSocketPath(): string {
   const his = GLib.getenv("HYPRLAND_INSTANCE_SIGNATURE");
+  if (!his) {
+    const runtimeDir = getRuntimeDir();
+    try {
+      const hyprDir = Gio.File.new_for_path(`${runtimeDir}/hypr`);
+      const enumerator = hyprDir.enumerate_children("standard::name", Gio.FileQueryInfoFlags.NONE, null);
+      let info;
+      while ((info = enumerator.next_file(null)) !== null) {
+        const name = info.get_name();
+        const socketPath = `${runtimeDir}/hypr/${name}/.socket2.sock`;
+        const socketFile = Gio.File.new_for_path(socketPath);
+        if (socketFile.query_exists(null)) {
+          return socketPath;
+        }
+      }
+    } catch {
+      // Fallback to original path
+    }
+  }
   return `${getRuntimeDir()}/hypr/${his}/.socket2.sock`;
 }
 
