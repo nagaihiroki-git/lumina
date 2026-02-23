@@ -2,6 +2,7 @@
 import Gio from "gi://Gio";
 import GLib from "gi://GLib";
 import { createSystemHook } from "./factory";
+import { batch } from "@lumina/bridge";
 
 export interface HyprlandWorkspace {
   id: number;
@@ -174,40 +175,45 @@ export const useHyprland = createSystemHook({
   ] as const,
 
   refresh(getters, setters) {
-    const ws = queryJSON<HyprlandWorkspace[]>("workspaces");
-    if (ws) {
-      const current = getters.workspaces();
-      const changed =
-        ws.length !== current.length ||
-        ws.some((w, i) => w.id !== current[i]?.id || w.name !== current[i]?.name);
-      if (changed) {
-        setters.workspaces(ws);
-      }
-    }
-
-    const mons = queryJSON<HyprlandMonitor[]>("monitors");
-    if (mons) {
-      const focused = mons.find((m) => m.focused);
-      if (focused) {
-        const currentFocused = getters.focusedWorkspace();
-        if (currentFocused?.id !== focused.activeWorkspace.id) {
-          const workspaces = getters.workspaces();
-          const focusedWs = workspaces.find((w) => w.id === focused.activeWorkspace.id);
-          setters.focusedWorkspace(focusedWs ?? null);
+    batch(() => {
+      const ws = queryJSON<HyprlandWorkspace[]>("workspaces");
+      if (ws) {
+        const current = getters.workspaces();
+        const changed =
+          ws.length !== current.length ||
+          ws.some((w, i) => w.id !== current[i]?.id || w.name !== current[i]?.name);
+        if (changed) {
+          setters.workspaces(ws);
         }
       }
 
-      const current = getters.monitors();
-      const changed =
-        mons.length !== current.length ||
-        mons.some((m, i) => m.id !== current[i]?.id);
-      if (changed) {
-        setters.monitors(mons);
-      }
-    }
+      const mons = queryJSON<HyprlandMonitor[]>("monitors");
+      if (mons) {
+        const focused = mons.find((m) => m.focused);
+        if (focused?.activeWorkspace?.id !== undefined) {
+          const currentFocused = getters.focusedWorkspace();
+          if (currentFocused?.id !== focused.activeWorkspace.id) {
+            const workspaces = getters.workspaces();
+            const focusedWs = workspaces.find((w) => w.id === focused.activeWorkspace.id);
+            setters.focusedWorkspace(focusedWs ?? null);
+          }
+        }
 
-    const client = queryJSON<HyprlandClient>("activewindow");
-    setters.focusedClient(client);
+        const current = getters.monitors();
+        const changed =
+          mons.length !== current.length ||
+          mons.some((m, i) => m.id !== current[i]?.id);
+        if (changed) {
+          setters.monitors(mons);
+        }
+      }
+
+      const client = queryJSON<HyprlandClient>("activewindow");
+      const currentClient = getters.focusedClient();
+      if (client?.address !== currentClient?.address) {
+        setters.focusedClient(client);
+      }
+    });
   },
 
   setup(_signals, refresh) {
