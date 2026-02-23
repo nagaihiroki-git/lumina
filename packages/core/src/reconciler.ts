@@ -30,6 +30,8 @@ export function renderChild(element: LuminaNode, container: any): () => void {
     const widgets = collectWidgets(fiber);
     for (const widget of widgets) {
       hostConfig.appendChild(container, widget);
+      // GTK requires show_all() on dynamically added widgets
+      if (widget.show_all) widget.show_all();
     }
   }
 
@@ -39,7 +41,7 @@ export function renderChild(element: LuminaNode, container: any): () => void {
       for (const widget of widgets) {
         hostConfig.removeChild(container, widget);
       }
-      destroyFiber(fiber);
+      cleanupFiber(fiber);
     }
   };
 }
@@ -293,6 +295,15 @@ function destroyFiber(fiber: Fiber): void {
     hostConfig.disposeInstance(fiber.instance);
     hostConfig.destroyInstance(fiber.instance);
   }
+}
+
+// Cleanup fiber tree without destroying instances (used when removeChild already destroyed them)
+function cleanupFiber(fiber: Fiber): void {
+  for (const child of fiber.children) {
+    cleanupFiber(child);
+  }
+  fiber.instance = null;
+  fiber.children = [];
 }
 
 export type { Fiber };
