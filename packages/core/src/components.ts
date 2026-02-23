@@ -259,7 +259,6 @@ export function For<T>({ each, fallback, children }: ForProps<T>): LuminaNode {
       const disposeEffect = createEffect(() => {
         const items = getItems();
 
-        // Clear previous children
         for (const cleanup of cleanups) {
           cleanup();
         }
