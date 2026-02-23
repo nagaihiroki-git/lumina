@@ -313,7 +313,20 @@ function getReactiveCleanups(widget: GtkWidget): Map<string, () => void> {
   return widget._reactiveCleanups;
 }
 
+// Track disposed widgets to avoid accessing them
+const disposedWidgets = new WeakSet<GtkWidget>();
+
+function markWidgetDisposed(widget: GtkWidget): void {
+  disposedWidgets.add(widget);
+}
+
+function isWidgetDisposed(widget: GtkWidget): boolean {
+  return disposedWidgets.has(widget);
+}
+
 function setWidgetProp(widget: GtkWidget, key: string, value: unknown): void {
+  if (isWidgetDisposed(widget)) return;
+
   try {
     if (key === "label") {
       if (widget.set_label) {
@@ -324,9 +337,43 @@ function setWidgetProp(widget: GtkWidget, key: string, value: unknown): void {
     } else {
       (widget as Record<string, unknown>)[key] = value;
     }
-  } catch (e) {
-    console.warn(`Failed to set ${key} on widget:`, e);
+  } catch {
+    markWidgetDisposed(widget);
   }
+}
+
+// Helper to create effects that safely handle widget disposal
+function createSafeEffect(
+  widget: GtkWidget,
+  key: string,
+  effectFn: () => void
+): () => void {
+  const cleanups = getReactiveCleanups(widget);
+  cleanups.get(key)?.();
+
+  let stopped = false;
+
+  const stop = createEffect(() => {
+    if (stopped || isWidgetDisposed(widget)) {
+      stopped = true;
+      return;
+    }
+
+    try {
+      effectFn();
+    } catch {
+      stopped = true;
+      markWidgetDisposed(widget);
+    }
+  });
+
+  const cleanup = () => {
+    stopped = true;
+    stop();
+  };
+
+  cleanups.set(key, cleanup);
+  return cleanup;
 }
 
 function bindReactiveProp(
@@ -335,16 +382,11 @@ function bindReactiveProp(
   key: string,
   getter: () => any
 ): void {
-  const cleanups = getReactiveCleanups(widget);
-  cleanups.get(key)?.();
-
-  const stop = createEffect(() => {
+  createSafeEffect(widget, key, () => {
     const rawValue = getter();
     const value = mapPropValue(widgetType, key, rawValue);
     setWidgetProp(widget, key, value);
   });
-
-  cleanups.set(key, stop);
 }
 
 function applyClassName(widget: GtkWidget, className: string): void {
@@ -357,14 +399,12 @@ function applyClassName(widget: GtkWidget, className: string): void {
 }
 
 function bindReactiveClassName(widget: GtkWidget, getter: () => string): void {
-  const cleanups = getReactiveCleanups(widget);
-  cleanups.get("className")?.();
-
-  const ctx = widget.get_style_context?.();
-  if (!ctx) return;
-
   let lastClasses: string[] = [];
-  const stop = createEffect(() => {
+
+  createSafeEffect(widget, "className", () => {
+    const ctx = widget.get_style_context?.();
+    if (!ctx) return;
+
     const newClassName = getter() || "";
     const newClasses = newClassName.split(" ").filter(Boolean);
 
@@ -376,8 +416,6 @@ function bindReactiveClassName(widget: GtkWidget, getter: () => string): void {
     }
     lastClasses = newClasses;
   });
-
-  cleanups.set("className", stop);
 }
 
 function applyProps(widget: GtkWidget, widgetType: string, props: Record<string, any>): void {
@@ -407,20 +445,18 @@ function applyProps(widget: GtkWidget, widgetType: string, props: Record<string,
 
   if (props.css) {
     if (typeof props.css === "function") {
-      const cleanups = getReactiveCleanups(widget);
       let lastCssClass = "";
-      const stop = createEffect(() => {
+
+      createSafeEffect(widget, "css", () => {
         const cssValue = props.css();
         if (cssValue) {
           const ctx = widget.get_style_context?.();
-          if (ctx) {
-            if (lastCssClass) ctx.remove_class(lastCssClass);
-            lastCssClass = injectInlineCss(widget.constructor.name, cssValue);
-            ctx.add_class(lastCssClass);
-          }
+          if (!ctx) return;
+          if (lastCssClass) ctx.remove_class(lastCssClass);
+          lastCssClass = injectInlineCss(widget.constructor.name, cssValue);
+          ctx.add_class(lastCssClass);
         }
       });
-      cleanups.set("css", stop);
     } else {
       const cssClass = injectInlineCss(widget.constructor.name, props.css);
       const ctx = widget.get_style_context?.();
@@ -438,6 +474,9 @@ function applyProps(widget: GtkWidget, widgetType: string, props: Record<string,
 }
 
 function cleanupReactiveBindings(widget: GtkWidget): void {
+  // Mark widget as disposed FIRST so any effects that try to run will skip
+  markWidgetDisposed(widget);
+
   const cleanups = widget._reactiveCleanups;
   if (cleanups) {
     for (const cleanup of cleanups.values()) {
@@ -570,6 +609,9 @@ export const gtk3HostConfig: HostConfig<GtkWidget, GtkWidget> = {
   removeChild(parent: GtkWidget, child: GtkWidget): void {
     if (!parent || !child) return;
 
+    // Must cleanup bindings BEFORE remove, as GTK may destroy widget during remove
+    cleanupReactiveBindings(child);
+
     try {
       if (parent.remove) {
         parent.remove(child);
@@ -577,8 +619,6 @@ export const gtk3HostConfig: HostConfig<GtkWidget, GtkWidget> = {
     } catch {
       // Widget may already be removed
     }
-
-    cleanupReactiveBindings(child);
 
     try {
       if (child.destroy) {
